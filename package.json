@@ -11,9 +11,11 @@
     "@types/react": "^18.2.33",
     "@types/react-dom": "^18.2.14",
     "@types/react-grid-layout": "^1.3.4",
+    "plotly.js": "^2.27.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-grid-layout": "^1.4.2",
+    "react-plotly.js": "^2.6.0",
     "react-scripts": "5.0.1",
     "typescript": "^4.9.5",
     "web-vitals": "^2.1.4"
@@ -48,7 +50,8 @@
     "@emotion/styled": "^11.11.0",
     "@fontsource/roboto": "^5.0.8",
     "@mui/icons-material": "^5.14.15",
-    "@mui/material": "^5.14.15"
+    "@mui/material": "^5.14.15",
+    "@types/react-plotly.js": "^2.6.2"
   },
   "peerDependencies": {
     "react": "^18.0.0",
