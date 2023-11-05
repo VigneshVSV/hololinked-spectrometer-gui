@@ -1,11 +1,13 @@
 import "/node_modules/react-grid-layout/css/styles.css";
 import "/node_modules/react-resizable/css/styles.css";
-import { useCallback, useState } from 'react';
+import { useCallback, useContext, useState } from 'react';
 import GridLayout from 'react-grid-layout';
 import Plot from 'react-plotly.js';
 import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, RadioGroup,
      FormControlLabel, Radio, TextField, Checkbox, IconButton } from '@mui/material';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
+import { DeviceContext } from "../App";
+import axios from "axios";
 
 
 
@@ -49,9 +51,29 @@ export const Device = () => {
 const ConnectionButton = () => {
 
     const [text, setText] = useState<string>('Connect')
+    const device = useContext<{ URL : string, info : any}>(DeviceContext)
+
+    const toggleDeviceConnection = async() => {
+        let newButtonText = 'Connect'
+        await axios({
+            url : '/connect', 
+            baseURL : device.URL,
+            method : 'post',
+        }).then((response) => {
+            if (response.status === 200)
+                newButtonText = 'Disconnect' 
+            setText(newButtonText)
+        }).catch((error : any) => {
+            console.log(error)
+        })
+    }
 
     return (
-        <Button variant='contained' size='large'>
+        <Button 
+            variant='contained' 
+            size='large'
+            onClick={toggleDeviceConnection}
+        >
             {text}
         </Button>
     )
