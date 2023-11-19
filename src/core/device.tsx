@@ -6,12 +6,13 @@ import Plot from 'react-plotly.js';
 import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, RadioGroup,
      FormControlLabel, Radio, TextField, Checkbox, IconButton } from '@mui/material';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
-import { DeviceContext } from "../App";
+import { Device, DeviceContext } from "../App";
 import axios from "axios";
+import { useRemoteFSM } from "../helpers/components";
 
 
 
-export const Device = () => {
+export const DeviceControl = () => {
 
     return (
         <Stack direction='row'>
@@ -50,29 +51,32 @@ export const Device = () => {
 
 const ConnectionButton = () => {
 
-    const [text, setText] = useState<string>('Connect')
-    const device = useContext<{ URL : string, info : any}>(DeviceContext)
-
-    const toggleDeviceConnection = async() => {
-        let newButtonText = 'Connect'
+    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const { text, connectionEndpoint, disabled } = useRemoteFSM({
+        ON : { text : 'Disconnect', connectionEndpoint : '/disconnect', disabled : false},
+        DISCONNECTED : {text : 'Connect', connectionEndpoint : '/connect', disabled : false},
+        MEASURING : {text : 'Disconnect', connectionEndpoint : '/disconnect', disabled : true},
+        DEFAULT : {text : 'Connect', connectionEndpoint : '/connect', disabled : false}
+    }, device.state)
+   
+    const toggleDeviceConnection = useCallback(async() => {
         await axios({
-            url : '/connect', 
+            url : connectionEndpoint, 
             baseURL : device.URL,
             method : 'post',
         }).then((response) => {
-            if (response.status === 200)
-                newButtonText = 'Disconnect' 
-            setText(newButtonText)
+            setDevice({...device, state : response.data.state[Object.keys(response.data.state)[0]]})
         }).catch((error : any) => {
             console.log(error)
         })
-    }
+    }, [device, connectionEndpoint])
 
     return (
         <Button 
             variant='contained' 
             size='large'
             onClick={toggleDeviceConnection}
+            disabled={disabled}
         >
             {text}
         </Button>
@@ -81,24 +85,44 @@ const ConnectionButton = () => {
 
 const AcquisitionButtons = () => {
 
-    const [text, setText] = useState<string>('Connect')
-    const [inAcquisition, setIsInAcquisition ] = useState<boolean>(false) 
+    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const { inAcquisition, acquisitionEndpoint, disabled } = useRemoteFSM({
+        ON : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : false},
+        DISCONNECTED : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : true},
+        MEASURING : { inAcquisition : true, acquisitionEndpoint : '/acquisition/stop', disabled : false},
+        DEFAULT : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : true}
+    }, device.state)
+    
+
+    const toggleAcquisition = useCallback(async() => {
+        await axios({
+            url : acquisitionEndpoint, 
+            baseURL : device.URL,
+            method : 'post',
+        }).then((response) => {
+            setDevice({...device, state : response.data.state[Object.keys(response.data.state)[0]]})
+        }).catch((error : any) => {
+            console.log(error)
+        })
+    }, [device, acquisitionEndpoint])
     
     return (
         <Stack direction='row'>
-            <ButtonGroup>
+            <ButtonGroup disabled={disabled}>
                 <Button disabled >
                     Acquisition :
                 </Button>
                 <Button 
                     variant='contained' size='large' color='secondary'
                     disabled={inAcquisition}    
+                    onClick={toggleAcquisition}
                 >
                     Start
                 </Button>
                 <Button 
                     variant='contained' size='large' color='secondary'
                     disabled={!inAcquisition}
+                    onClick={toggleAcquisition}
                 >
                     Stop
                 </Button>
@@ -110,11 +134,12 @@ const AcquisitionButtons = () => {
 
 const CurrentState = () => {
 
-    const [state, setState] = useState('unknown')
+    const [device, _] = useContext<[Device, Function]>(DeviceContext)
+    // const [state, setState] = useState('unknown')
 
     return (
         <Typography variant='button'>
-            State : {state}
+            State : {device.state}
         </Typography>
     )
 }
