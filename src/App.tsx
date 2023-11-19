@@ -6,49 +6,66 @@ import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 
 import { Box, Button, Divider, Link, Tabs, Typography, Tab, AppBar, Toolbar, TextField, IconButton} from "@mui/material";
-import { useCallback, useState, createContext } from 'react';
+import { useCallback, useState, createContext, useContext } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import { TabPanel } from './helpers/components';
-import { Device } from './core/device';
+import { DeviceControl } from './core/device';
 import axios from 'axios';
 
 
-export const DeviceContext = createContext<any | { URL : string, info : any}>(null)
+
+export type Device = { 
+    URL : string
+    // info : any
+    state : string 
+}
+
+export const DeviceContext = createContext<any | [Device, Function]>(null)
+
+const unknownDevice = {
+    URL : '',
+    // info : {},
+    state : 'unknown'
+}
+
 
 
 function App() {
 
-    const [device, setDevice] = useState({
-        URL : '', 
-        info : {}
-    })
+    const [device, setDevice] = useState(unknownDevice)
    
     return (
-        <DeviceContext.Provider value={device}>
-            <DeviceSearchBar setDevice={setDevice} />
+        <DeviceContext.Provider value={[device, setDevice]}>
+            <DeviceSearchBar />
             <Toolbar variant="dense" />
-            <Functionalities 
-                borderPadding={1} 
-                tabPadding={1} 
-            />
+            <Functionalities />
         </DeviceContext.Provider>
         
     );
 }
 
 
-const DeviceSearchBar = ({ setDevice } : any) => {
+const DeviceSearchBar = () => {
 
-    const [deviceSearchText, setDeviceSearchText] = useState<string>('')
+    const [deviceURL, setDeviceURL] = useState<string>('https://localhost:8083/spectrometer/ocean-optics/USB2000-plus')
+    const [deviceFound, setDeviceFound] = useState<boolean | null>(false)
+    const [_, setDevice] = useContext(DeviceContext)
 
     const loadDevice = async() => {
-        const response = await axios.get(`${deviceSearchText}/resources/gui`)
-        if(response.status === 200) 
-            setDevice({
-                URL : deviceSearchText,
-                info : response.data.returnValue,
-                state : response.data.state
-            })
+        let device : Device = unknownDevice
+        const response = await axios.get(`${deviceURL}/resources/gui`)
+        switch(response.status){
+            case 202  : device = {
+                            URL : deviceURL,
+                            // info : response.data.returnValue,
+                            state : response.data.state[Object.keys(response.data.state)[0]]
+                        }; break;
+
+            case 404  : break
+
+        }
+        setDevice(device)
+        console.debug(device)
     }
     
     return(
@@ -61,8 +78,10 @@ const DeviceSearchBar = ({ setDevice } : any) => {
                     <TextField 
                         size="small" 
                         label="Device URL"            
+                        error={deviceFound !== null && deviceFound}
                         sx={{ display : 'flex', flexGrow : 1 }}
-                        onChange={(event) => setDeviceSearchText(event.target.value)}
+                        value={deviceURL}
+                        onChange={(event) => setDeviceURL(event.target.value)}
                     />
                 </Box>
                 <IconButton onClick={loadDevice}>
@@ -74,10 +93,7 @@ const DeviceSearchBar = ({ setDevice } : any) => {
 }
 
 
-const Functionalities = ({ borderPadding, tabPadding } : { 
-    borderPadding : number, 
-    tabPadding : number 
-}) => {
+const Functionalities = () => {
 
     const GUIOptions = ['Device', 'Database', 'Information']
     const [currentTab, setCurrentTab] = useState(0)
@@ -87,7 +103,7 @@ const Functionalities = ({ borderPadding, tabPadding } : {
     }, [])
 
     return (
-        <Box sx={{ p : borderPadding, pt : tabPadding }}>
+        <Box sx={{ p : 1, pt : 1 }}>
             <Tabs 
                 id="remote-object-fields-tab"
                 variant="scrollable"
@@ -125,7 +141,8 @@ const TabOptions = ({ option } : { option : string }) => {
 
     switch(option) {
         case 'Database' : return <Typography>Database Tab not yet implemented</Typography>
-        default : return <Device />
+        case 'Information' : return <Typography>Information Tab not yet implemented</Typography>
+        default : return <DeviceControl />
     }
 }
 
