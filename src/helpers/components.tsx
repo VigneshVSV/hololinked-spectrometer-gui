@@ -1,4 +1,5 @@
 import { Box } from "@mui/material";
+import { useEffect, useState } from "react";
 
 
 
@@ -31,4 +32,20 @@ export const TabPanel = (props: TabPanelProps) => {
             )}
         </div>
     );
+}
+
+
+export const useRemoteFSM = (props : {[key : string] : { [key : string] : any}}, state : string) => {
+
+    const [currentProps, setCurrentProps] = useState(props[state] || props["DEFAULT"]) 
+
+    const updateProps = useEffect(() => {
+        let newProps = props[state]
+        if(!newProps) 
+            newProps = props["DEFAULT"]
+        console.log("new props", newProps)
+        setCurrentProps(newProps)
+    }, [state])
+
+    return currentProps
 }
