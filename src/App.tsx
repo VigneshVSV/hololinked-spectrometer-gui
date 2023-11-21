@@ -48,23 +48,30 @@ function App() {
 const DeviceSearchBar = () => {
 
     const [deviceURL, setDeviceURL] = useState<string>('https://localhost:8083/spectrometer/ocean-optics/USB2000-plus')
-    const [deviceFound, setDeviceFound] = useState<boolean | null>(false)
+    const [deviceFound, setDeviceFound] = useState<boolean | null>(null)
     const [_, setDevice] = useContext(DeviceContext)
 
     const loadDevice = async() => {
         let device : Device = unknownDevice
-        const response = await axios.get(`${deviceURL}/resources/gui`)
-        switch(response.status){
-            case 202  : device = {
-                            URL : deviceURL,
-                            // info : response.data.returnValue,
-                            state : response.data.state[Object.keys(response.data.state)[0]]
-                        }; break;
-
-            case 404  : break
-
+        let _deviceFound : boolean = false
+        try {
+            const response = await axios.get(`${deviceURL}/resources/gui`)
+            switch(response.status){
+                case 202  : device = {
+                                URL : deviceURL,
+                                // info : response.data.returnValue,
+                                state : response.data.state[Object.keys(response.data.state)[0]]
+                            }; 
+                            _deviceFound = true;
+                            break;
+    
+                case 404  : _deviceFound = false; 
+            }
+        } catch (error) {
+            _deviceFound = false      
         }
         setDevice(device)
+        setDeviceFound(_deviceFound)
         console.debug(device)
     }
     
@@ -78,7 +85,7 @@ const DeviceSearchBar = () => {
                     <TextField 
                         size="small" 
                         label="Device URL"            
-                        error={deviceFound !== null && deviceFound}
+                        error={deviceFound !== null && !deviceFound}
                         sx={{ display : 'flex', flexGrow : 1 }}
                         value={deviceURL}
                         onChange={(event) => setDeviceURL(event.target.value)}

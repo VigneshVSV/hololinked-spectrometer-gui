@@ -1,13 +1,14 @@
 import "/node_modules/react-grid-layout/css/styles.css";
 import "/node_modules/react-resizable/css/styles.css";
-import { useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import GridLayout from 'react-grid-layout';
 import Plot from 'react-plotly.js';
 import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, RadioGroup,
      FormControlLabel, Radio, TextField, Checkbox, IconButton } from '@mui/material';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
-import { Device, DeviceContext } from "../App";
 import axios from "axios";
+
+import { Device, DeviceContext } from "../App";
 import { useRemoteFSM } from "../helpers/components";
 
 
@@ -17,37 +18,32 @@ export const DeviceControl = () => {
     return (
         <Stack direction='row'>
             <Stack width={1000}>
-                <Stack direction='row'>
-                    <Box sx={{ p : 2 }}>
-                        <ConnectionButton />
-                    </Box>
-                    <Box sx={{ p : 2 }}>
-                        <AcquisitionButtons />
-                    </Box>
-                    <Box sx={{ p : 2, pt : 3 }}>
-                        <CurrentState />
-                    </Box>
-                </Stack>
-                <Divider>
-                    LIVE SPECTRUM
-                </Divider>
+                <Control />
                 <SpectrumGraph />
             </Stack>
             <Divider orientation="vertical" sx={{ pl : 2 }} />
-            <Stack>
-                <Typography variant='button' color={'grey'} fontSize={18} sx={{p : 2}}>
-                    settings
-                </Typography>    
-                <TriggerModeOptions />
-                <IntegrationTime />
-                <IntegrationTimeBounds />
-                <InternalBackgroundSubstraction />
-                <CustomBackground />
-            </Stack>
+            <Settings />
         </Stack>
     )
 }
 
+
+
+const Control = () => {
+    return (
+        <Stack direction='row'>
+            <Box sx={{ p : 2 }}>
+                <ConnectionButton />
+            </Box>
+            <Box sx={{ p : 2 }}>
+                <AcquisitionButtons />
+            </Box>
+            <Box sx={{ p : 2, pt : 3 }}>
+                <CurrentState />
+            </Box>
+        </Stack>
+    )
+}
 
 const ConnectionButton = () => {
 
@@ -158,47 +154,178 @@ const SpectrumGraph = () => {
     const [lastMeasureTimestamp, setLastMeasuredTimestamp] = useState<string>('unknown')
 
     return (
-        <Stack>
-            <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
-                Last Measured Timestamp : {lastMeasureTimestamp}
-            </Typography>
-            <GridLayout
-                width={1000}
-                cols={20}
-                rowHeight={10}
-                margin={[0,0]}
-                maxRows={57}
-                preventCollision={true}
-                onLayoutChange={handleLayoutChange}
-                >    
-                <Box
-                    key='main-spectrometer-plot'
-                    data-grid={{ 
-                        x : 0, y : 0, w : 20, h : 57
-                    }}
-                    sx={{ border : '1px solid grey'}}
-                    >
-                    <Plot 
-                        data={[{
-                            x: [1, 2, 3],
-                            y: [2, 6, 3],
-                            type: 'scatter',
-                            mode: 'lines+markers',
-                            marker: {color: 'red'},
-                        },
-                        {type: 'bar', x: [1, 2, 3], y: [2, 5, 3]},
-                    ]}
-                    layout={{ width : plotWidth, height : plotHeight, title: 'A Fancy Plot'}}
-                    />
-                </Box>
-            </GridLayout>
-        </Stack>
+        <>
+            <Divider>
+                LIVE SPECTRUM
+            </Divider>
+            <Stack>
+                <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
+                    Last Measured Timestamp : {lastMeasureTimestamp}
+                </Typography>
+                <GridLayout
+                    width={1000}
+                    cols={20}
+                    rowHeight={10}
+                    margin={[0,0]}
+                    maxRows={57}
+                    preventCollision={true}
+                    onLayoutChange={handleLayoutChange}
+                    >    
+                    <Box
+                        key='main-spectrometer-plot'
+                        data-grid={{ 
+                            x : 0, y : 0, w : 20, h : 57
+                        }}
+                        sx={{ border : '1px solid grey'}}
+                        >
+                        <Plot 
+                            data={[{
+                                x: [1, 2, 3],
+                                y: [2, 6, 3],
+                                type: 'scatter',
+                                mode: 'lines+markers',
+                                marker: {color: 'red'},
+                            },
+                            {type: 'bar', x: [1, 2, 3], y: [2, 5, 3]},
+                        ]}
+                        layout={{ width : plotWidth, height : plotHeight, title: 'A Fancy Plot'}}
+                        />
+                    </Box>
+                </GridLayout>
+            </Stack>
+        </>
+        
     )
 }
 
 
 
+type SettingOptions = {
+    autoApply? : boolean
+    triggerMode? : number 
+    integrationTime? : number
+    integrationTimeBounds? : Array<number>,
+    backgroundSubstraction? : 'AUTO' | 'CUSTOM' | null
+    customBackgroundIntensity? : Array<number> | null
+}
+
+const defaultSettings : SettingOptions = {
+    autoApply : false,
+    triggerMode : 0,
+    integrationTime : 1000,
+    integrationTimeBounds : [1, 1000],
+    backgroundSubstraction : null, 
+    customBackgroundIntensity : null
+}
+
+const SettingsContext = createContext<[SettingOptions, Function]>([defaultSettings, 
+    () => console.error("no settings update method provided yet")])
+
+
+const Settings = () => {
+
+    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const [settings, setSettings] = useState(defaultSettings) 
+    const [enabled, setEnabled] = useState(false)
+
+    const updateSettings = (newSettings : SettingOptions) => {
+        setSettings({
+            ...settings,
+            ...newSettings
+        })
+    } 
+
+    useEffect(() => {
+        const fetchSettings = async() => {
+            let newSettings = {}
+            let newEnabled = device.URL? true : false
+            await axios({
+                url :  `/parameters/values?serialNumber=serial_number&\
+                    integrationTime=integration_time_millisec&triggerMode=trigger_mode&\
+                    backgroundCorrection=background_correction&nonlinearityCorrection=nonlinearity_correction&\
+                    customBackgroundIntensity=custom_background_intensity`.replace(/\s+/g,''),
+                baseURL : device.URL,
+                method : 'get' 
+            }).then((response) => {
+                switch(response.status) {
+                    // @ts-ignore
+                    case 200 : ; 
+                    case 202 : newSettings = response.data.returnValue; 
+                            newEnabled = true; break; 
+                    case 404 : newEnabled = false; console.log("error while fetching parameters - 404, is it a spectrometer?"); break;
+                    default :  newEnabled = false; console.log('unhandled response status code');
+                }
+                console.log("new fetched settings", newSettings)
+            }).catch((error) => {
+                console.log(error)
+                newEnabled = false
+            })
+            updateSettings(newSettings)
+            setEnabled(newEnabled)
+        }
+        fetchSettings()
+    }, [device])
+    
+
+    return (
+        <Stack sx={{ opacity : enabled? 1 : 0.15, pointerEvents : enabled? 'all' : 'none'}}>
+            <SettingsContext.Provider value={[settings, updateSettings]}>
+                <Typography variant='button' color={'grey'} fontSize={18} sx={{p : 2}}>
+                    settings
+                </Typography>    
+                <AutoApplySettings />
+                <TriggerModeOptions />
+                <IntegrationTime />
+                <IntegrationTimeBounds />
+                <BackgroundSubstraction />
+            </SettingsContext.Provider>
+        </Stack>
+    )
+}
+
+
+const AutoApplySettings = () => {
+
+    const [{ autoApply }, updateSettings] = useContext(SettingsContext)
+
+    const toggleAutoApply = () => {
+        let newAutoApply = autoApply? false : true // i.e. toggle every time 
+        updateSettings({ autoApply : newAutoApply })
+    }
+
+    return (    
+        <Stack direction='row'>
+            <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
+                auto apply on change :
+            </Typography>
+            <Checkbox checked={autoApply} onChange={toggleAutoApply}></Checkbox>
+        </Stack>
+    )
+}
+
+
 const TriggerModeOptions = () => {
+
+    const [{ triggerMode, autoApply }, updateSettings] = useContext(SettingsContext)
+    const [device, setDevice] = useContext(DeviceContext)
+    const [error, setError] = useState<boolean>(false)
+   
+    const handleTriggerModeChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
+        const apply = async() => {
+            if(autoApply) {
+                const response = await axios.put(
+                    `${device.URL}/trigger-mode`,
+                    { value : Number(event.target.value) }
+                )
+                console.log(response)
+            }
+            updateSettings(
+                {triggerMode : event.target.value}
+            )
+        }
+        // console.log(event.target.value)
+        apply()
+    }, [triggerMode, autoApply, device])
 
     return (
         <FormControl>
@@ -208,12 +335,13 @@ const TriggerModeOptions = () => {
                 </Typography>
                 <RadioGroup
                     row
-                    defaultValue="continuous"
+                    value={triggerMode}
                     name="radio-buttons-group"   
+                    onChange={handleTriggerModeChange}
                 >
-                    <FormControlLabel value="continuous" control={<Radio />} label="continuous" />
-                    <FormControlLabel value="software" control={<Radio />} label="software" />
-                    <FormControlLabel value="hardware" control={<Radio />} label="hardware" />
+                    <FormControlLabel value={0} control={<Radio />} label="continuous" />
+                    <FormControlLabel value={1} control={<Radio />} label="software" />
+                    <FormControlLabel value={2} control={<Radio />} label="hardware" />
                 </RadioGroup>
             </Stack>
         </FormControl>
@@ -223,14 +351,53 @@ const TriggerModeOptions = () => {
 
 const IntegrationTime = () => {
 
-    const [helperText, setHelperText] = useState<string>('milliseconds')
+    const [{ autoApply, integrationTime}, updateSettings] = useContext(SettingsContext)
+    const [device, setDevice] = useContext(DeviceContext)
+    const [integrationTimeUnit, setIntegrationTimeUnit] = useState<string>('milli-seconds')
+
+    const handleIntegrationTimeUnitChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
+        setIntegrationTimeUnit(event.target.value)
+    }, [])
+
+    const setIntegrationTime = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
+        const apply = async() => {
+            if(autoApply) {
+                const response = await axios.put(
+                    `${device.URL}/integration-time/${integrationTimeUnit}`,
+                    { value : Number(event.target.value) }
+                )
+                console.log(response)
+            }
+            updateSettings(
+                { integrationTime : event.target.value }
+            )
+        }
+        // console.log(event.target.value)
+        apply()
+    }, [integrationTime, autoApply, device, integrationTimeUnit])
+
 
     return (
         <Stack direction='row'>
             <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 2.5}}>
                 Integration Time :
             </Typography>
-            <TextField variant='filled' size='small' helperText={helperText} />
+            <TextField 
+                variant='filled' 
+                size='small' 
+                helperText={integrationTimeUnit} 
+                onChange={setIntegrationTime}
+                value={integrationTime}
+            />
+            <RadioGroup 
+                row 
+                sx={{ pb : 2, pl : 1 }} 
+                defaultValue='milli-seconds'
+                onChange={handleIntegrationTimeUnitChange}
+            >
+                <FormControlLabel value='milli-seconds' control={<Radio />} label='ms' />
+                <FormControlLabel value='micro-seconds' control={<Radio />} label='µs' />
+            </RadioGroup>
         </Stack>
     )
 }
@@ -271,33 +438,55 @@ const IntegrationTimeBounds = () => {
 }
 
 
-const InternalBackgroundSubstraction = () => {
+const BackgroundSubstraction = () => {
+
+    const [{ autoApply, backgroundSubstraction}, updateSettings] = useContext(SettingsContext)
+    const [device, setDevice] = useContext(DeviceContext)
+    
+    const setBackgroundSubstraction = useCallback((type : 'AUTO' | 'CUSTOM' | null) => {
+        const apply = async() => {
+            if(autoApply) {
+                const response = await axios.put(
+                    `${device.URL}/background-correction`,
+                    { value : type }
+                )
+                console.log("auto backgrond set", response)
+            }
+            updateSettings(
+                { backgroundSubstraction : type }
+            )
+        }
+        apply()
+    }, [autoApply, device, backgroundSubstraction])
 
     return (
-        <Stack direction='row'>
-            <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
-                Seabreeze Background Substraction :
-            </Typography>
-            <Checkbox></Checkbox>
-        </Stack>
+        <>
+            <Stack direction='row'>
+                <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
+                    Auto Background Substraction :
+                </Typography>
+                <Checkbox 
+                    checked={backgroundSubstraction==='AUTO'} 
+                    onChange={() => setBackgroundSubstraction('AUTO')}
+                />    
+            </Stack>
+            <Stack direction='row'>
+                <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
+                    Custom Background :
+                </Typography>
+                <Checkbox
+                    checked={backgroundSubstraction==='CUSTOM'} 
+                    onChange={() => setBackgroundSubstraction('CUSTOM')}
+                />
+                <IconButton>
+                    <FileUploadIcon />
+                </IconButton>
+                <Typography sx= {{ p : 1}}>
+                    (no file selected yet, default value Substraction or no substraction)
+                </Typography>
+            </Stack>
+        </>
     )
 }
 
 
-const CustomBackground = () => {
-
-    return (
-        <Stack direction='row'>
-            <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
-                Custom Background :
-            </Typography>
-            <Checkbox></Checkbox>
-            <IconButton>
-                <FileUploadIcon />
-            </IconButton>
-            <Typography sx= {{ p : 1}}>
-                (no file selected yet, default value subtraction or no substraction)
-            </Typography>
-        </Stack>
-    )
-}
