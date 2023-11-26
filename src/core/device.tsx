@@ -2,9 +2,10 @@ import "/node_modules/react-grid-layout/css/styles.css";
 import "/node_modules/react-resizable/css/styles.css";
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import GridLayout from 'react-grid-layout';
-import Plot from 'react-plotly.js';
+import Plot  from 'react-plotly.js';
+import { TypedArray } from "plotly.js";
 import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, RadioGroup,
-     FormControlLabel, Radio, TextField, Checkbox, IconButton } from '@mui/material';
+     FormControlLabel, Radio, TextField, Checkbox, IconButton, Slider } from '@mui/material';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import axios from "axios";
 
@@ -28,7 +29,6 @@ export const DeviceControl = () => {
 }
 
 
-
 const Control = () => {
     return (
         <Stack direction='row'>
@@ -41,9 +41,14 @@ const Control = () => {
             <Box sx={{ p : 2, pt : 3 }}>
                 <CurrentState />
             </Box>
+            <Box sx={{ p : 2 }}>
+                <ResetFaultButton />
+            </Box>
+            
         </Stack>
     )
 }
+
 
 const ConnectionButton = () => {
 
@@ -128,6 +133,39 @@ const AcquisitionButtons = () => {
 }
 
 
+const ResetFaultButton = () => {
+
+    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const { disabled } = useRemoteFSM({
+        FAULT : { disabled : false },
+        DEFAULT : { disabled : true}
+    }, device.state)
+   
+    const resetFault = useCallback(async() => {
+        await axios({
+            url : '/fault/reset', 
+            baseURL : device.URL,
+            method : 'post',
+        }).then((response) => {
+            setDevice({...device, state : response.data.state[Object.keys(response.data.state)[0]]})
+        }).catch((error : any) => {
+            console.log(error)
+        })
+    }, [device])
+
+    return (
+        <Button 
+            variant='contained' 
+            size='large'
+            onClick={resetFault}
+            disabled={disabled}
+        >
+            Reset Fault
+        </Button>
+    )
+}
+
+
 const CurrentState = () => {
 
     const [device, _] = useContext<[Device, Function]>(DeviceContext)
@@ -145,13 +183,39 @@ const SpectrumGraph = () => {
 
     const [plotWidth, setPlotWidth] = useState(1000)
     const [plotHeight, setPlotHeight] = useState(plotWidth*(9/16))
-    
+    const [lastMeasureTimestamp, setLastMeasuredTimestamp] = useState<string>('unknown')
+    // @ts-ignore
+    const [spectrum, setSpectrum] = useState<TypedArray>(Array.from(Array(1024).keys()))
+    // @ts-ignore
+    const [pixels, setPixels] = useState<TypedArray>(Array.from(Array(1024).keys()))
+    const [eventSrc, setEventSrc] = useState<EventSource | null>(null)
+    const [device, setDevice] = useContext(DeviceContext)
+
     const handleLayoutChange = useCallback(((layout : GridLayout.Layout[]) => {
         setPlotWidth((layout[0].w)*50)
         setPlotHeight((layout[0].h)*10)
     }), [])
 
-    const [lastMeasureTimestamp, setLastMeasuredTimestamp] = useState<string>('unknown')
+    useEffect(() => {
+        let src = null 
+        if(device.URL) {
+            src = new EventSource(`${device.URL}/event/data-measured`)
+            src.onmessage = (event : MessageEvent) => {
+                let spectrum = JSON.parse(event.data)
+                setSpectrum(spectrum.value)
+                setLastMeasuredTimestamp(spectrum.timestamp)
+                console.log("new spectrum", spectrum)
+            }
+            src.onopen = (event) => {
+                console.log(`subscribed to event source at ${device.URL}/event/data-measured`)
+            } 
+            src.onerror = (error) => {
+                console.log(error)
+            }
+        }
+        setEventSrc(src)
+    }, [device, setSpectrum, setLastMeasuredTimestamp])
+
 
     return (
         <>
@@ -170,7 +234,7 @@ const SpectrumGraph = () => {
                     maxRows={57}
                     preventCollision={true}
                     onLayoutChange={handleLayoutChange}
-                    >    
+                >    
                     <Box
                         key='main-spectrometer-plot'
                         data-grid={{ 
@@ -180,15 +244,20 @@ const SpectrumGraph = () => {
                         >
                         <Plot 
                             data={[{
-                                x: [1, 2, 3],
-                                y: [2, 6, 3],
+                                x: pixels,
+                                y: spectrum,
                                 type: 'scatter',
-                                mode: 'lines+markers',
-                                marker: {color: 'red'},
-                            },
-                            {type: 'bar', x: [1, 2, 3], y: [2, 5, 3]},
+                                mode: 'lines',
+                                marker: {color: 'red'}
+                            }
                         ]}
-                        layout={{ width : plotWidth, height : plotHeight, title: 'A Fancy Plot'}}
+                        layout={{ 
+                            width : plotWidth, 
+                            height : plotHeight, 
+                            title: 'Spectrum',
+                            yaxis : { range : [0,2000] }
+                        
+                        }}
                         />
                     </Box>
                 </GridLayout>
@@ -233,6 +302,10 @@ const Settings = () => {
             ...settings,
             ...newSettings
         })
+        // console.log("new settings", {
+        //     ...settings,
+        //     ...newSettings
+        // })
     } 
 
     useEffect(() => {
@@ -271,7 +344,7 @@ const Settings = () => {
         <Stack sx={{ opacity : enabled? 1 : 0.15, pointerEvents : enabled? 'all' : 'none'}}>
             <SettingsContext.Provider value={[settings, updateSettings]}>
                 <Typography variant='button' color={'grey'} fontSize={18} sx={{p : 2}}>
-                    settings
+                    settings :
                 </Typography>    
                 <AutoApplySettings />
                 <TriggerModeOptions />
@@ -312,20 +385,31 @@ const TriggerModeOptions = () => {
    
     const handleTriggerModeChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
         const apply = async() => {
+            let finalSettingValue = Number(event.target.value), hasError = false
             if(autoApply) {
-                const response = await axios.put(
-                    `${device.URL}/trigger-mode`,
-                    { value : Number(event.target.value) }
-                )
-                console.log(response)
+                try {
+                    const response = await axios.put(
+                        `${device.URL}/trigger-mode`,
+                        { value : finalSettingValue }
+                    )
+                    switch(response.status) {
+                        case 200: 
+                        case 202: finalSettingValue = response.data.returnValue; break;
+                        case 404: hasError = true; break;
+                    }
+                } catch(error) {
+                    console.log(error)
+                    hasError = true
+                }
             }
             updateSettings(
-                {triggerMode : event.target.value}
+                { triggerMode : finalSettingValue }   
             )
+            setError(hasError)
         }
         // console.log(event.target.value)
         apply()
-    }, [triggerMode, autoApply, device])
+    }, [triggerMode, autoApply, device, updateSettings])
 
     return (
         <FormControl>
@@ -356,26 +440,36 @@ const IntegrationTime = () => {
     const [integrationTimeUnit, setIntegrationTimeUnit] = useState<string>('milli-seconds')
 
     const handleIntegrationTimeUnitChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
+        let newIntegrationTime = integrationTimeUnit === 'milli-seconds'? (integrationTime as number)*1000 : (integrationTime as number)/1000
         setIntegrationTimeUnit(event.target.value)
-    }, [])
+        updateSettings({ integrationTime : newIntegrationTime })
+    }, [integrationTime, integrationTimeUnit])
 
     const setIntegrationTime = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
         const apply = async() => {
+            let finalSettingValue = Number(event.target.value), hasError = false
             if(autoApply) {
-                const response = await axios.put(
-                    `${device.URL}/integration-time/${integrationTimeUnit}`,
-                    { value : Number(event.target.value) }
-                )
-                console.log(response)
+                if(autoApply) {
+                    try {
+                        const response = await axios.put(
+                            `${device.URL}/integration-time/${integrationTimeUnit}`,
+                            { value : finalSettingValue }
+                        )
+                        switch(response.status) {
+                            case 200: 
+                            case 202: finalSettingValue = response.data.returnValue; break;
+                            case 404: hasError = true; break;
+                        }
+                    } catch(error) {
+                        console.log(error)
+                        hasError = true
+                    }
+                }
             }
-            updateSettings(
-                { integrationTime : event.target.value }
-            )
+            updateSettings({ integrationTime : finalSettingValue })
         }
-        // console.log(event.target.value)
         apply()
-    }, [integrationTime, autoApply, device, integrationTimeUnit])
-
+    }, [integrationTime, autoApply, device, integrationTimeUnit, updateSettings])
 
     return (
         <Stack direction='row'>
@@ -407,6 +501,7 @@ const IntegrationTime = () => {
 const IntegrationTimeBounds = () => {
 
     const [helperText, setHelperText] = useState<string>('milliseconds')
+   
 
     return (
         <Stack direction='row'>
@@ -443,17 +538,27 @@ const BackgroundSubstraction = () => {
     const [{ autoApply, backgroundSubstraction}, updateSettings] = useContext(SettingsContext)
     const [device, setDevice] = useContext(DeviceContext)
     
-    const setBackgroundSubstraction = useCallback((type : 'AUTO' | 'CUSTOM' | null) => {
+    const setBackgroundSubstraction = useCallback((event : React.ChangeEvent<HTMLInputElement>, type : 'AUTO' | 'CUSTOM') => {
+        let checked = event.target.checked, finalSettingValue = null, hasError = false
         const apply = async() => {
             if(autoApply) {
-                const response = await axios.put(
-                    `${device.URL}/background-correction`,
-                    { value : type }
-                )
-                console.log("auto backgrond set", response)
+                try {
+                    const response = await axios.put(
+                        `${device.URL}/background-correction`,
+                        { value : checked? type : null }
+                    )
+                    switch(response.status) {
+                        case 200: 
+                        case 202: finalSettingValue = response.data.returnValue; break;
+                        case 404: hasError = true; break;
+                    }
+                } catch(error) {
+                    console.log(error)
+                    hasError = true
+                }
             }
             updateSettings(
-                { backgroundSubstraction : type }
+                { backgroundSubstraction : checked? type : null }
             )
         }
         apply()
@@ -467,7 +572,7 @@ const BackgroundSubstraction = () => {
                 </Typography>
                 <Checkbox 
                     checked={backgroundSubstraction==='AUTO'} 
-                    onChange={() => setBackgroundSubstraction('AUTO')}
+                    onChange={(event) => setBackgroundSubstraction(event, 'AUTO')}
                 />    
             </Stack>
             <Stack direction='row'>
@@ -476,7 +581,7 @@ const BackgroundSubstraction = () => {
                 </Typography>
                 <Checkbox
                     checked={backgroundSubstraction==='CUSTOM'} 
-                    onChange={() => setBackgroundSubstraction('CUSTOM')}
+                    onChange={(event) => setBackgroundSubstraction(event, 'CUSTOM')}
                 />
                 <IconButton>
                     <FileUploadIcon />

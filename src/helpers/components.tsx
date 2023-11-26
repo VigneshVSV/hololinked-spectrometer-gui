@@ -1,4 +1,4 @@
-import { Box } from "@mui/material";
+import { Alert, Box, Snackbar } from "@mui/material";
 import { useEffect, useState } from "react";
 
 
@@ -32,6 +32,27 @@ export const TabPanel = (props: TabPanelProps) => {
             )}
         </div>
     );
+}
+
+
+export const ErrorSnackbars = () => {
+    const [open, setOpen] = useState(false);
+    const [message, setMessage] = useState('')
+
+    const handleClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
+        if (reason === 'clickaway') {
+            return
+        }
+        setOpen(false);
+    };
+  
+    return (
+        <Snackbar open={open} autoHideDuration={6000} onClose={handleClose}>
+            <Alert onClose={handleClose} severity="success" sx={{ width: '100%' }}>
+                {message}
+            </Alert>
+        </Snackbar>
+    )
 }
 
 
