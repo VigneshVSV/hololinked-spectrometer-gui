@@ -9,35 +9,38 @@ import { Box, Button, Divider, Link, Tabs, Typography, Tab, AppBar, Toolbar, Tex
 import { useCallback, useState, createContext, useContext } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import { TabPanel } from './helpers/components';
-import { DeviceControl } from './core/device';
+import { DeviceConsole } from './core/device';
 import axios from 'axios';
 
 
 
 export type Device = { 
     URL : string
-    // info : any
     state : string 
+    instanceName : string
 }
 
-export const DeviceContext = createContext<any | [Device, Function]>(null)
+export type DeviceContextType = [Device, Function]
 
-const unknownDevice = {
+export const DeviceContext = createContext<null | DeviceContextType>(null)
+
+export const unknownDevice = {
     URL : '',
-    // info : {},
-    state : 'unknown'
+    state : 'unknown',
+    instanceName : 'unknown'
 }
 
 
 
 function App() {
 
-    const [device, setDevice] = useState(unknownDevice)
+    const [device, setDevice] = useState<Device>(unknownDevice)
    
     return (
         <DeviceContext.Provider value={[device, setDevice]}>
             <DeviceSearchBar />
             <Toolbar variant="dense" />
+            {/* toolbar adds padding & should be similar to defined in DeviceSearchBar */}
             <Functionalities />
         </DeviceContext.Provider>
         
@@ -45,22 +48,22 @@ function App() {
 }
 
 
-const DeviceSearchBar = () => {
+export const DeviceSearchBar = () => {
 
     const [deviceURL, setDeviceURL] = useState<string>('https://localhost:8083/spectrometer/ocean-optics/USB2000-plus')
     const [deviceFound, setDeviceFound] = useState<boolean | null>(null)
-    const [_, setDevice] = useContext(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
 
     const loadDevice = async() => {
-        let device : Device = unknownDevice
+        let _device : Device = device
         let _deviceFound : boolean = false
         try {
-            const response = await axios.get(`${deviceURL}/resources/gui`)
+            const response = await axios.get(`${deviceURL}/state`)
             switch(response.status){
-                case 202  : device = {
+                case 200  : _device = {
                                 URL : deviceURL,
-                                // info : response.data.returnValue,
-                                state : response.data.state[Object.keys(response.data.state)[0]]
+                                state : response.data.returnValue,
+                                instanceName : deviceURL.split('/').slice(3).join('/')
                             }; 
                             _deviceFound = true;
                             break;
@@ -68,18 +71,20 @@ const DeviceSearchBar = () => {
                 case 404  : _deviceFound = false; 
             }
         } catch (error) {
-            _deviceFound = false      
+            _deviceFound = false  
+            console.log(error)    
         }
-        setDevice(device)
+        setDevice(_device)
         setDeviceFound(_deviceFound)
-        console.debug(device)
+        console.debug(_device)
     }
     
     return(
         <AppBar color="inherit" sx={{ pt : 0.5 }}>
+            {/* padding top for TextField label to not be covered by browser search bar */}
             <Toolbar variant="dense">
                 <Typography fontSize={20}>
-                    Spectrometer
+                    OceanOptics Spectrometer
                 </Typography>
                 <Box sx={{pl : 2, display : 'flex', flexGrow : 0.5}}>
                     <TextField 
@@ -149,7 +154,7 @@ const TabOptions = ({ option } : { option : string }) => {
     switch(option) {
         case 'Database' : return <Typography>Database Tab not yet implemented</Typography>
         case 'Information' : return <Typography>Information Tab not yet implemented</Typography>
-        default : return <DeviceControl />
+        default : return <DeviceConsole />
     }
 }
 

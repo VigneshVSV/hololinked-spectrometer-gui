@@ -9,27 +9,35 @@ import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, Radi
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import axios from "axios";
 
-import { Device, DeviceContext } from "../App";
-import { useRemoteFSM } from "../helpers/components";
+import { Device, DeviceContext, DeviceContextType } from "../App";
+import { useRemoteFSM } from "../helpers/hooks";
+import { FSMProps } from "./props";
 
 
+const FSMContext = createContext<{[key : string] : { [key : string] : any}}>(FSMProps["DEFAULT"])
 
-export const DeviceControl = () => {
+
+export const DeviceConsole = () => {
+
+    const [device, _] = useContext(DeviceContext) as DeviceContextType
+    const currentProps = useRemoteFSM(FSMProps as any, device.state)
 
     return (
         <Stack direction='row'>
-            <Stack width={1000}>
-                <Control />
-                <SpectrumGraph />
-            </Stack>
-            <Divider orientation="vertical" sx={{ pl : 2 }} />
-            <Settings />
+            <FSMContext.Provider value={currentProps} >
+                <Stack>
+                    <Control />
+                    <SpectrumGraph />
+                </Stack>
+                <Divider orientation="vertical" sx={{ pl : 2 }} />
+                <Settings />
+            </FSMContext.Provider>
         </Stack>
     )
 }
 
 
-const Control = () => {
+export const Control = () => {
     return (
         <Stack direction='row'>
             <Box sx={{ p : 2 }}>
@@ -44,7 +52,6 @@ const Control = () => {
             <Box sx={{ p : 2 }}>
                 <ResetFaultButton />
             </Box>
-            
         </Stack>
     )
 }
@@ -52,25 +59,24 @@ const Control = () => {
 
 const ConnectionButton = () => {
 
-    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
-    const { text, connectionEndpoint, disabled } = useRemoteFSM({
-        ON : { text : 'Disconnect', connectionEndpoint : '/disconnect', disabled : false},
-        DISCONNECTED : {text : 'Connect', connectionEndpoint : '/connect', disabled : false},
-        MEASURING : {text : 'Disconnect', connectionEndpoint : '/disconnect', disabled : true},
-        DEFAULT : {text : 'Connect', connectionEndpoint : '/connect', disabled : false}
-    }, device.state)
-   
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
+    const { text, endpoint, disabled } = useContext(FSMContext)["connection"]
+    
     const toggleDeviceConnection = useCallback(async() => {
-        await axios({
-            url : connectionEndpoint, 
-            baseURL : device.URL,
-            method : 'post',
-        }).then((response) => {
-            setDevice({...device, state : response.data.state[Object.keys(response.data.state)[0]]})
-        }).catch((error : any) => {
+        try {
+            const response = await axios({
+                            url : endpoint, 
+                            baseURL : device.URL,
+                            method : 'post',
+                    }) // RPC 
+            setDevice({
+                ...device, 
+                state : response.data.state[device.instanceName]
+            })
+        } catch (error : any) {
             console.log(error)
-        })
-    }, [device, connectionEndpoint])
+        }
+    }, [device, endpoint])
 
     return (
         <Button 
@@ -86,7 +92,7 @@ const ConnectionButton = () => {
 
 const AcquisitionButtons = () => {
 
-    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const { inAcquisition, acquisitionEndpoint, disabled } = useRemoteFSM({
         ON : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : false},
         DISCONNECTED : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : true},
@@ -135,7 +141,7 @@ const AcquisitionButtons = () => {
 
 const ResetFaultButton = () => {
 
-    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const { disabled } = useRemoteFSM({
         FAULT : { disabled : false },
         DEFAULT : { disabled : true}
@@ -168,9 +174,8 @@ const ResetFaultButton = () => {
 
 const CurrentState = () => {
 
-    const [device, _] = useContext<[Device, Function]>(DeviceContext)
-    // const [state, setState] = useState('unknown')
-
+    const [device, _] = useContext(DeviceContext) as DeviceContextType
+   
     return (
         <Typography variant='button'>
             State : {device.state}
@@ -189,7 +194,7 @@ const SpectrumGraph = () => {
     // @ts-ignore
     const [pixels, setPixels] = useState<TypedArray>(Array.from(Array(1024).keys()))
     const [eventSrc, setEventSrc] = useState<EventSource | null>(null)
-    const [device, setDevice] = useContext(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
 
     const handleLayoutChange = useCallback(((layout : GridLayout.Layout[]) => {
         setPlotWidth((layout[0].w)*50)
@@ -293,7 +298,7 @@ const SettingsContext = createContext<[SettingOptions, Function]>([defaultSettin
 
 const Settings = () => {
 
-    const [device, setDevice] = useContext<[Device, Function]>(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const [settings, setSettings] = useState(defaultSettings) 
     const [enabled, setEnabled] = useState(false)
 
@@ -380,7 +385,7 @@ const AutoApplySettings = () => {
 const TriggerModeOptions = () => {
 
     const [{ triggerMode, autoApply }, updateSettings] = useContext(SettingsContext)
-    const [device, setDevice] = useContext(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const [error, setError] = useState<boolean>(false)
    
     const handleTriggerModeChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
@@ -436,7 +441,7 @@ const TriggerModeOptions = () => {
 const IntegrationTime = () => {
 
     const [{ autoApply, integrationTime}, updateSettings] = useContext(SettingsContext)
-    const [device, setDevice] = useContext(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const [integrationTimeUnit, setIntegrationTimeUnit] = useState<string>('milli-seconds')
 
     const handleIntegrationTimeUnitChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
@@ -536,7 +541,7 @@ const IntegrationTimeBounds = () => {
 const BackgroundSubstraction = () => {
 
     const [{ autoApply, backgroundSubstraction}, updateSettings] = useContext(SettingsContext)
-    const [device, setDevice] = useContext(DeviceContext)
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     
     const setBackgroundSubstraction = useCallback((event : React.ChangeEvent<HTMLInputElement>, type : 'AUTO' | 'CUSTOM') => {
         let checked = event.target.checked, finalSettingValue = null, hasError = false

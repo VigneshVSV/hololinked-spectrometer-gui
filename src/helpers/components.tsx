@@ -1,5 +1,6 @@
 import { Alert, Box, Snackbar } from "@mui/material";
 import { useEffect, useState } from "react";
+import { createContext } from "vm";
 
 
 
@@ -56,14 +57,14 @@ export const ErrorSnackbars = () => {
 }
 
 
-export const useRemoteFSM = (props : {[key : string] : { [key : string] : any}}, state : string) => {
+export const useRemoteFSM = (FSMProps : {[key : string] : { [key : string] : any}}, state : string) => {
 
-    const [currentProps, setCurrentProps] = useState(props[state] || props["DEFAULT"]) 
+    const [currentProps, setCurrentProps] = useState(FSMProps[state] || FSMProps["DEFAULT"]) 
 
     const updateProps = useEffect(() => {
-        let newProps = props[state]
+        let newProps = FSMProps[state]
         if(!newProps) 
-            newProps = props["DEFAULT"]
+            newProps = FSMProps["DEFAULT"]
         console.log("new props", newProps)
         setCurrentProps(newProps)
     }, [state])
