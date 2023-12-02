@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Control } from "../core/device"
-import { Device, DeviceContext, DeviceSearchBar, unknownDevice } from "../App";
+import { Device, DeviceContext, unknownDevice } from "../App";
+import { DeviceSearchBar } from "./app-bar";
 import { Box } from "@mui/material";
 
 

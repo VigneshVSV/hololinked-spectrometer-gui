@@ -6,6 +6,9 @@ export const FSMProps = {
             endpoint : '/disconnect', 
             disabled : false
         },
+        acquisition : {
+            disabled : false
+        }
     },
     DISCONNECTED : {
         connection : {
@@ -19,6 +22,10 @@ export const FSMProps = {
             text : 'Disconnect', 
             endpoint : '/disconnect', 
             disabled : true
+        },
+        acquisition : {
+            disabled : false, 
+            endpoint : '/acquisition/stop'
         }
     },
     DEFAULT : {
@@ -26,6 +33,12 @@ export const FSMProps = {
             text : 'Connect', 
             endpoint : '/connect', 
             disabled : false
+        },
+        acquisition : {
+            disabled : true,
+            endpoint : '/acquisition/start'
         }
     }
 }
+
+

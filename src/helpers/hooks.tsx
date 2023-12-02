@@ -11,6 +11,11 @@ export const useRemoteFSM = (FSMProps : {[key : string] : { [key : string] : any
         let newProps = FSMProps[state]
         if(!newProps) 
             newProps = FSMProps["DEFAULT"]
+        else 
+            newProps = {
+                ...FSMProps["DEFAULT"],
+                ...newProps
+            }        
         console.log("new props", newProps)
         setCurrentProps(newProps)
     }, [state])

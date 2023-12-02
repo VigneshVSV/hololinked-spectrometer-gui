@@ -1,7 +1,4 @@
-import "/node_modules/react-grid-layout/css/styles.css";
-import "/node_modules/react-resizable/css/styles.css";
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import GridLayout from 'react-grid-layout';
 import Plot  from 'react-plotly.js';
 import { TypedArray } from "plotly.js";
 import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, RadioGroup,
@@ -63,19 +60,18 @@ const ConnectionButton = () => {
     const { text, endpoint, disabled } = useContext(FSMContext)["connection"]
     
     const toggleDeviceConnection = useCallback(async() => {
-        try {
-            const response = await axios({
-                            url : endpoint, 
-                            baseURL : device.URL,
-                            method : 'post',
-                    }) // RPC 
+        await axios({
+            url : endpoint, 
+            baseURL : device.URL,
+            method : 'post',
+        }).then((response) => {
             setDevice({
                 ...device, 
                 state : response.data.state[device.instanceName]
             })
-        } catch (error : any) {
+        }).catch((error : any) => {
             console.log(error)
-        }
+        })
     }, [device, endpoint])
 
     return (
@@ -93,25 +89,22 @@ const ConnectionButton = () => {
 const AcquisitionButtons = () => {
 
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
-    const { inAcquisition, acquisitionEndpoint, disabled } = useRemoteFSM({
-        ON : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : false},
-        DISCONNECTED : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : true},
-        MEASURING : { inAcquisition : true, acquisitionEndpoint : '/acquisition/stop', disabled : false},
-        DEFAULT : { inAcquisition : false, acquisitionEndpoint : '/acquisition/start', disabled : true}
-    }, device.state)
+    const { endpoint, disabled } = useContext(FSMContext).acquisition
     
-
     const toggleAcquisition = useCallback(async() => {
         await axios({
-            url : acquisitionEndpoint, 
+            url : endpoint, 
             baseURL : device.URL,
             method : 'post',
         }).then((response) => {
-            setDevice({...device, state : response.data.state[Object.keys(response.data.state)[0]]})
+            setDevice({
+                ...device, 
+                state : response.data.state[device.instanceName]
+            })
         }).catch((error : any) => {
             console.log(error)
         })
-    }, [device, acquisitionEndpoint])
+    }, [device, endpoint])
     
     return (
         <Stack direction='row'>
@@ -121,14 +114,14 @@ const AcquisitionButtons = () => {
                 </Button>
                 <Button 
                     variant='contained' size='large' color='secondary'
-                    disabled={inAcquisition}    
+                    disabled={device.state !== 'MEASURING'}    
                     onClick={toggleAcquisition}
                 >
                     Start
                 </Button>
                 <Button 
                     variant='contained' size='large' color='secondary'
-                    disabled={!inAcquisition}
+                    disabled={device.state === 'MEASURING'}
                     onClick={toggleAcquisition}
                 >
                     Stop
@@ -196,11 +189,6 @@ const SpectrumGraph = () => {
     const [eventSrc, setEventSrc] = useState<EventSource | null>(null)
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
 
-    const handleLayoutChange = useCallback(((layout : GridLayout.Layout[]) => {
-        setPlotWidth((layout[0].w)*50)
-        setPlotHeight((layout[0].h)*10)
-    }), [])
-
     useEffect(() => {
         let src = null 
         if(device.URL) {
@@ -231,41 +219,31 @@ const SpectrumGraph = () => {
                 <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
                     Last Measured Timestamp : {lastMeasureTimestamp}
                 </Typography>
-                <GridLayout
-                    width={1000}
-                    cols={20}
-                    rowHeight={10}
-                    margin={[0,0]}
-                    maxRows={57}
-                    preventCollision={true}
-                    onLayoutChange={handleLayoutChange}
-                >    
-                    <Box
-                        key='main-spectrometer-plot'
-                        data-grid={{ 
-                            x : 0, y : 0, w : 20, h : 57
-                        }}
-                        sx={{ border : '1px solid grey'}}
-                        >
-                        <Plot 
-                            data={[{
-                                x: pixels,
-                                y: spectrum,
-                                type: 'scatter',
-                                mode: 'lines',
-                                marker: {color: 'red'}
-                            }
-                        ]}
-                        layout={{ 
-                            width : plotWidth, 
-                            height : plotHeight, 
-                            title: 'Spectrum',
-                            yaxis : { range : [0,2000] }
-                        
-                        }}
-                        />
-                    </Box>
-                </GridLayout>
+                <Box
+                    key='main-spectrometer-plot'
+                    data-grid={{ 
+                        x : 0, y : 0, w : 20, h : 57
+                    }}
+                    sx={{ border : '1px solid grey'}}
+                    >
+                    <Plot 
+                        data={[{
+                            x: pixels,
+                            y: spectrum,
+                            type: 'scatter',
+                            mode: 'lines',
+                            marker: {color: 'red'}
+                        }
+                    ]}
+                    layout={{ 
+                        width : plotWidth, 
+                        height : plotHeight, 
+                        title: 'Spectrum',
+                        yaxis : { range : [0,2000] }
+                    
+                    }}
+                    />
+                </Box>
             </Stack>
         </>
         
