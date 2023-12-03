@@ -21,14 +21,14 @@ export const DeviceConsole = () => {
 
     return (
         <Stack direction='row'>
-            <FSMContext.Provider value={currentProps} >
-                <Stack>
+            <Stack>
+                <FSMContext.Provider value={currentProps} >
                     <Control />
                     <SpectrumGraph />
-                </Stack>
-                <Divider orientation="vertical" sx={{ pl : 2 }} />
-                <Settings />
-            </FSMContext.Provider>
+                </FSMContext.Provider>
+            </Stack>
+            <Divider orientation="vertical" sx={{ pl : 2 }} />
+            <Settings />
         </Stack>
     )
 }
@@ -284,9 +284,9 @@ export const SpectrumGraph = () => {
 
 type SettingOptions = {
     autoApply? : boolean
-    triggerMode? : number 
+    triggerMode? : 0 | 1 | 2 | 3
     integrationTime? : number
-    integrationTimeBounds? : Array<number>,
+    // integrationTimeBounds? : Array<number>,
     backgroundSubstraction? : 'AUTO' | 'CUSTOM' | null
     customBackgroundIntensity? : Array<number> | null
 }
@@ -295,7 +295,7 @@ const defaultSettings : SettingOptions = {
     autoApply : false,
     triggerMode : 0,
     integrationTime : 1000,
-    integrationTimeBounds : [1, 1000],
+    // integrationTimeBounds : [1, 1000],
     backgroundSubstraction : null, 
     customBackgroundIntensity : null
 }
@@ -354,7 +354,7 @@ const Settings = () => {
     
 
     return (
-        <Stack sx={{ opacity : enabled? 1 : 0.15, pointerEvents : enabled? 'all' : 'none'}}>
+        <Stack sx={{ opacity : device.URL? 1 : 0.15, pointerEvents : device.URL? 'all' : 'none'}}>
             <SettingsContext.Provider value={[settings, updateSettings]}>
                 <Typography variant='button' color={'grey'} fontSize={18} sx={{p : 2}}>
                     settings :
@@ -362,7 +362,7 @@ const Settings = () => {
                 <AutoApplySettings />
                 <TriggerModeOptions />
                 <IntegrationTime />
-                <IntegrationTimeBounds />
+                {/* <IntegrationTimeBounds /> */}
                 <BackgroundSubstraction />
             </SettingsContext.Provider>
         </Stack>
@@ -388,6 +388,7 @@ const AutoApplySettings = () => {
         </Stack>
     )
 }
+
 
 const useDeviceSetting = (name : string, URL : string) : [any, Function] => {
     const [settings, updateSettings] = useContext(SettingsContext)
@@ -429,7 +430,7 @@ const TriggerModeOptions = () => {
         
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const [triggerMode, setTriggerMode] = useDeviceSetting('triggerMode', `${device.URL}/trigger-mode`)
-
+  
     return (
         <FormControl>
             <Stack direction='row'>
