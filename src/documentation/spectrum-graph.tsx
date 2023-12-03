@@ -1,17 +1,17 @@
-import { createContext, useContext, useState } from "react";
+import { useContext, useState } from "react";
 import { Box, Stack } from "@mui/material";
-import { Control, SpectrumGraph } from "../core/device"
+import { Control, FSMContext, SpectrumGraph } from "../core/device"
 import { Device, DeviceContext, DeviceContextType, unknownDevice } from "../App";
 import { DeviceSearchBar } from "./app-bar";
 import { useRemoteFSM } from "../helpers/components";
 import { FSMProps } from "../core/props";
 
 
-export const ControlApp = () => {
+export const ControlAppWithGraph = () => {
     const [device, setDevice] = useState<Device>(unknownDevice)
    
     return (
-        <Box sx={{ backgroundColor : 'white' }}>
+        <Box id='control-app-with-graph-box' sx={{ backgroundColor : 'white' }}>
             <DeviceContext.Provider value={[device, setDevice]}>
                 <DeviceSearchBar />
                 <GraphConsole />                
@@ -20,7 +20,6 @@ export const ControlApp = () => {
     );
 }
 
-const FSMContext = createContext<{[key : string] : { [key : string] : any}}>(FSMProps["DEFAULT"])
 
 export const GraphConsole = () => {
 
@@ -28,12 +27,10 @@ export const GraphConsole = () => {
     const currentProps = useRemoteFSM(FSMProps as any, device.state)
 
     return (
-        <Stack direction='row'>
+        <Stack id='graph-console-box' sx={{ display : 'flex', flexGrow : 1 }}>
             <FSMContext.Provider value={currentProps} >
-                <Stack>
-                    <Control />
-                    <SpectrumGraph />
-                </Stack>
+                <Control />
+                <SpectrumGraph />
             </FSMContext.Provider>
         </Stack>
     )

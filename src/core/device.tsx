@@ -6,12 +6,12 @@ import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, Radi
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import axios from "axios";
 
-import { Device, DeviceContext, DeviceContextType } from "../App";
+import { DeviceContext, DeviceContextType } from "../App";
 import { useRemoteFSM } from "../helpers/hooks";
 import { FSMProps } from "./props";
 
 
-const FSMContext = createContext<{[key : string] : { [key : string] : any}}>(FSMProps["DEFAULT"])
+export const FSMContext = createContext<{[key : string] : { [key : string] : any}}>(FSMProps["DEFAULT"])
 
 
 export const DeviceConsole = () => {
@@ -190,6 +190,12 @@ export const SpectrumGraph = () => {
     const [wavelengths, setWavelengths] = useState<TypedArray>(Array.from(Array(1024).keys()))
     const [eventSrc, setEventSrc] = useState<EventSource | null>(null)
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
+    const plotDivRef = useRef<any>(null)
+    const [plotDimensions, setPlotDimensions] = useState<Array<number>>([1000, 1000*9/16])
+
+    useEffect(() => {
+        setPlotDimensions([plotDivRef.current.clientWidth, plotDivRef.current.clientHeight])
+    }, [])
 
     useEffect(() => {
         let src : EventSource | null = eventSrc
@@ -241,36 +247,32 @@ export const SpectrumGraph = () => {
 
 
     return (
-        <>
+        <Stack id='spectrum-graph-box' sx={{ display : 'flex', flexGrow :  1}}>
             <Divider>
                 LIVE SPECTRUM
             </Divider>
-            <Stack>
-                <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
-                    Last Measured Timestamp : {lastMeasureTimestamp}
-                </Typography>
-                <Box sx={{ border : '1px solid grey'}}>
-                    <Plot 
-                        data={[{
-                            x: wavelengths,
-                            y: intensity,
-                            type: 'scatter',
-                            mode: 'lines',
-                            marker: {color: 'red'}
-                        }
+            <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
+                Last Measured Timestamp : {lastMeasureTimestamp}
+            </Typography>
+            <Box ref={plotDivRef} sx={{ border : '1px solid grey', display : 'flex', flexGrow :  1}}>
+                <Plot 
+                    data={[{
+                        x: wavelengths,
+                        y: intensity,
+                        type: 'scatter',
+                        mode: 'lines',
+                        marker: {color: 'red'}
+                    }
                     ]}
                     layout={{ 
-                        width : plotWidth, 
-                        height : plotHeight, 
-                        title: 'Spectrum',
+                        width : plotDimensions[0], 
+                        height : plotDimensions[1], 
                         yaxis : { range : [0,2000], title : 'intensity/counts (arbitrary units)' },
                         xaxis : { title : 'wavelength (nm)'}
                     }}
-                    />
-                </Box>
-            </Stack>
-        </>
-        
+                />
+            </Box>
+        </Stack>     
     )
 }
 
