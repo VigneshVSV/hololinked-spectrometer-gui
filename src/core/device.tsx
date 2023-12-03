@@ -266,8 +266,7 @@ export const SpectrumGraph = () => {
                         type: 'scatter',
                         mode: 'lines',
                         marker: {color: 'red'}
-                    }
-                    ]}
+                    }]}
                     layout={{ 
                         width : plotDimensions[0], 
                         height : plotDimensions[1], 
@@ -304,7 +303,7 @@ const SettingsContext = createContext<[SettingOptions, Function]>([defaultSettin
     () => console.error("no settings update method provided yet")])
 
 
-const Settings = () => {
+export const Settings = () => {
 
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
     const [settings, setSettings] = useState(defaultSettings) 
@@ -398,14 +397,14 @@ const useDeviceSetting = (name : string, URL : string) : [any, Function] => {
     
     const handleSettingChange = useCallback((value : any) => {
         const apply = async() => {
-            let finalSettingValue = value, hasError = false
+            let finalSetting : SettingOptions = {}, hasError = false
             if(autoApply) {
                 try {
                     const response = await axios.put(
                         URL, { value : value }
                     )
                     switch(response.status) {
-                        case 200: finalSettingValue = response.data.returnValue; break;
+                        case 200: value = response.data.returnValue; break;
                         case 404: hasError = true; break;
                     }
                 } catch(error) {
@@ -413,9 +412,8 @@ const useDeviceSetting = (name : string, URL : string) : [any, Function] => {
                     hasError = true
                 }
             }
-            updateSettings(
-                { triggerMode : finalSettingValue }   
-            )
+            finalSetting[name as keyof SettingOptions] = value
+            updateSettings(finalSetting)
             setError(hasError)
         }
         // console.log(event.target.value)
@@ -455,41 +453,17 @@ const TriggerModeOptions = () => {
 
 const IntegrationTime = () => {
 
-    const [{ autoApply, integrationTime}, updateSettings] = useContext(SettingsContext)
-    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
+    const [device, _] = useContext(DeviceContext) as DeviceContextType
     const [integrationTimeUnit, setIntegrationTimeUnit] = useState<string>('milli-seconds')
+    const [__, updateSettings] = useContext(SettingsContext)
+    const [integrationTime, setIntegrationTime] = useDeviceSetting('integrationTime', 
+                                                                `${device.URL}/integration-time/${integrationTimeUnit}`)
 
     const handleIntegrationTimeUnitChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
         let newIntegrationTime = integrationTimeUnit === 'milli-seconds'? (integrationTime as number)*1000 : (integrationTime as number)/1000
         setIntegrationTimeUnit(event.target.value)
         updateSettings({ integrationTime : newIntegrationTime })
     }, [integrationTime, integrationTimeUnit])
-
-    const setIntegrationTime = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
-        const apply = async() => {
-            let finalSettingValue = Number(event.target.value), hasError = false
-            if(autoApply) {
-                if(autoApply) {
-                    try {
-                        const response = await axios.put(
-                            `${device.URL}/integration-time/${integrationTimeUnit}`,
-                            { value : finalSettingValue }
-                        )
-                        switch(response.status) {
-                            case 200: 
-                            case 202: finalSettingValue = response.data.returnValue; break;
-                            case 404: hasError = true; break;
-                        }
-                    } catch(error) {
-                        console.log(error)
-                        hasError = true
-                    }
-                }
-            }
-            updateSettings({ integrationTime : finalSettingValue })
-        }
-        apply()
-    }, [integrationTime, autoApply, device, integrationTimeUnit, updateSettings])
 
     return (
         <Stack direction='row'>
@@ -500,7 +474,7 @@ const IntegrationTime = () => {
                 variant='filled' 
                 size='small' 
                 helperText={integrationTimeUnit} 
-                onChange={setIntegrationTime}
+                onChange={(event : React.ChangeEvent<HTMLInputElement>) => {setIntegrationTime(Number(event.target.value))}}
                 value={integrationTime}
             />
             <RadioGroup 
@@ -555,34 +529,13 @@ const IntegrationTimeBounds = () => {
 
 const BackgroundSubstraction = () => {
 
-    const [{ autoApply, backgroundSubstraction}, updateSettings] = useContext(SettingsContext)
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
+    const [backgroundSubstraction, setBackgroundSubstraction] = useDeviceSetting('backgroundSubstraction',
+                                                                        `${device.URL}/background-correction`)
     
-    const setBackgroundSubstraction = useCallback((event : React.ChangeEvent<HTMLInputElement>, type : 'AUTO' | 'CUSTOM') => {
-        let checked = event.target.checked, finalSettingValue = null, hasError = false
-        const apply = async() => {
-            if(autoApply) {
-                try {
-                    const response = await axios.put(
-                        `${device.URL}/background-correction`,
-                        { value : checked? type : null }
-                    )
-                    switch(response.status) {
-                        case 200: 
-                        case 202: finalSettingValue = response.data.returnValue; break;
-                        case 404: hasError = true; break;
-                    }
-                } catch(error) {
-                    console.log(error)
-                    hasError = true
-                }
-            }
-            updateSettings(
-                { backgroundSubstraction : checked? type : null }
-            )
-        }
-        apply()
-    }, [autoApply, device, backgroundSubstraction])
+    const handleBackgroundSubstraction = useCallback((checked : boolean, type : 'AUTO' | 'CUSTOM') => {
+        setBackgroundSubstraction(checked? type : null)
+    }, [setBackgroundSubstraction])
 
     return (
         <>
@@ -592,7 +545,7 @@ const BackgroundSubstraction = () => {
                 </Typography>
                 <Checkbox 
                     checked={backgroundSubstraction==='AUTO'} 
-                    onChange={(event) => setBackgroundSubstraction(event, 'AUTO')}
+                    onChange={(event : React.ChangeEvent<HTMLInputElement>) => handleBackgroundSubstraction(event.target.checked, 'AUTO')}
                 />    
             </Stack>
             <Stack direction='row'>
@@ -601,7 +554,7 @@ const BackgroundSubstraction = () => {
                 </Typography>
                 <Checkbox
                     checked={backgroundSubstraction==='CUSTOM'} 
-                    onChange={(event) => setBackgroundSubstraction(event, 'CUSTOM')}
+                    onChange={(event : React.ChangeEvent<HTMLInputElement>) => handleBackgroundSubstraction(event.target.checked, 'CUSTOM')}
                 />
                 <IconButton>
                     <FileUploadIcon />
