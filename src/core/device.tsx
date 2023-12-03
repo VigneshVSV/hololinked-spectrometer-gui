@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import Plot  from 'react-plotly.js';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import Plot from 'react-plotly.js';
 import { TypedArray } from "plotly.js";
 import { Box, Button, Stack, ButtonGroup, Typography, Divider, FormControl, RadioGroup,
      FormControlLabel, Radio, TextField, Checkbox, IconButton, Slider } from '@mui/material';
@@ -67,6 +67,7 @@ const ConnectionButton = () => {
         }).then((response) => {
             setDevice({
                 ...device, 
+                previousState : device.state,
                 state : response.data.state[device.instanceName]
             })
         }).catch((error : any) => {
@@ -89,9 +90,10 @@ const ConnectionButton = () => {
 const AcquisitionButtons = () => {
 
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
-    const { endpoint, disabled } = useContext(FSMContext).acquisition
+    const { endpoint, disabled } = useContext(FSMContext)["acquisition"]
     
     const toggleAcquisition = useCallback(async() => {
+        console.log("acquisition endpoint", endpoint)
         await axios({
             url : endpoint, 
             baseURL : device.URL,
@@ -99,6 +101,7 @@ const AcquisitionButtons = () => {
         }).then((response) => {
             setDevice({
                 ...device, 
+                previousState : device.state,
                 state : response.data.state[device.instanceName]
             })
         }).catch((error : any) => {
@@ -114,14 +117,14 @@ const AcquisitionButtons = () => {
                 </Button>
                 <Button 
                     variant='contained' size='large' color='secondary'
-                    disabled={device.state !== 'MEASURING'}    
+                    disabled={device.state === 'MEASURING'}    
                     onClick={toggleAcquisition}
                 >
                     Start
                 </Button>
                 <Button 
                     variant='contained' size='large' color='secondary'
-                    disabled={device.state === 'MEASURING'}
+                    disabled={device.state !== 'MEASURING'}
                     onClick={toggleAcquisition}
                 >
                     Stop
@@ -135,18 +138,17 @@ const AcquisitionButtons = () => {
 const ResetFaultButton = () => {
 
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
-    const { disabled } = useRemoteFSM({
-        FAULT : { disabled : false },
-        DEFAULT : { disabled : true}
-    }, device.state)
-   
+    
     const resetFault = useCallback(async() => {
         await axios({
             url : '/fault/reset', 
             baseURL : device.URL,
             method : 'post',
         }).then((response) => {
-            setDevice({...device, state : response.data.state[Object.keys(response.data.state)[0]]})
+            setDevice({
+                ...device, 
+                previousState : device.state,
+                state : response.data.state[device.instanceName]})
         }).catch((error : any) => {
             console.log(error)
         })
@@ -157,7 +159,7 @@ const ResetFaultButton = () => {
             variant='contained' 
             size='large'
             onClick={resetFault}
-            disabled={disabled}
+            disabled={device.state !== 'FAULT'}
         >
             Reset Fault
         </Button>
@@ -177,37 +179,65 @@ const CurrentState = () => {
 }
 
 
-const SpectrumGraph = () => {
+export const SpectrumGraph = () => {
 
     const [plotWidth, setPlotWidth] = useState(1000)
     const [plotHeight, setPlotHeight] = useState(plotWidth*(9/16))
     const [lastMeasureTimestamp, setLastMeasuredTimestamp] = useState<string>('unknown')
-    // @ts-ignore
-    const [spectrum, setSpectrum] = useState<TypedArray>(Array.from(Array(1024).keys()))
-    // @ts-ignore
-    const [pixels, setPixels] = useState<TypedArray>(Array.from(Array(1024).keys()))
+    // @ts-ignore (default spectrum to tell user no real data has been loaded)
+    const [intensity, setIntensity] = useState<TypedArray>(Array.from(Array(1024).keys()))
+    // @ts-ignore (default wavelengths to tell user x-axis is invalid and has not been loaded)
+    const [wavelengths, setWavelengths] = useState<TypedArray>(Array.from(Array(1024).keys()))
     const [eventSrc, setEventSrc] = useState<EventSource | null>(null)
     const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
 
     useEffect(() => {
-        let src = null 
-        if(device.URL) {
-            src = new EventSource(`${device.URL}/event/data-measured`)
+        let src : EventSource | null = eventSrc
+        if(device.URL && eventSrc === null) {
+            src = new EventSource(`${device.URL}/intensity/measurement-event`)
             src.onmessage = (event : MessageEvent) => {
-                let spectrum = JSON.parse(event.data)
-                setSpectrum(spectrum.value)
-                setLastMeasuredTimestamp(spectrum.timestamp)
-                console.log("new spectrum", spectrum)
+                let intensity = JSON.parse(event.data)
+                setIntensity(intensity.value)
+                setLastMeasuredTimestamp(intensity.timestamp)
+                console.log("new intensity", intensity)
             }
             src.onopen = (event) => {
-                console.log(`subscribed to event source at ${device.URL}/event/data-measured`)
+                console.log(`subscribed to event source at ${device.URL}/intensity/measurement-event`)
             } 
             src.onerror = (error) => {
                 console.log(error)
             }
         }
         setEventSrc(src)
-    }, [device, setSpectrum, setLastMeasuredTimestamp])
+        return () => {
+            /* clean up method */
+            if(src) {
+                src.close()
+                console.log(`closed event source subscribed at ${device.URL}/intensity/measurement-event`)
+            }
+        }
+    }, [device.URL])
+
+    useEffect(() => {
+        const fetchWavelengths = async() => {
+            let _wavelengths = wavelengths // old or default value
+            if(_wavelengths[0] === 0 && device.state !== 'DISCONNECTED') {
+                try {
+                    const response = await axios.get(`${device.URL}/supported-wavelengths`)
+                    switch(response.status) {
+                        case 200 : _wavelengths = response.data.returnValue; break;
+                        case 404 : break;
+                    }
+                } catch(error) {
+                    console.log(error)
+                }
+                console.log('fetched new wavelengths', _wavelengths)
+            }
+            // @ts-ignore
+            setWavelengths(_wavelengths)
+        }
+        fetchWavelengths()
+    }, [device.state])
 
 
     return (
@@ -219,17 +249,11 @@ const SpectrumGraph = () => {
                 <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
                     Last Measured Timestamp : {lastMeasureTimestamp}
                 </Typography>
-                <Box
-                    key='main-spectrometer-plot'
-                    data-grid={{ 
-                        x : 0, y : 0, w : 20, h : 57
-                    }}
-                    sx={{ border : '1px solid grey'}}
-                    >
+                <Box sx={{ border : '1px solid grey'}}>
                     <Plot 
                         data={[{
-                            x: pixels,
-                            y: spectrum,
+                            x: wavelengths,
+                            y: intensity,
                             type: 'scatter',
                             mode: 'lines',
                             marker: {color: 'red'}
@@ -239,8 +263,8 @@ const SpectrumGraph = () => {
                         width : plotWidth, 
                         height : plotHeight, 
                         title: 'Spectrum',
-                        yaxis : { range : [0,2000] }
-                    
+                        yaxis : { range : [0,2000], title : 'intensity/counts (arbitrary units)' },
+                        xaxis : { title : 'wavelength (nm)'}
                     }}
                     />
                 </Box>

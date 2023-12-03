@@ -32,7 +32,7 @@ export const FSMProps = {
         connection : {
             text : 'Connect', 
             endpoint : '/connect', 
-            disabled : false
+            disabled : true
         },
         acquisition : {
             disabled : true,

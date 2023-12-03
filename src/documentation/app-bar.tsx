@@ -24,10 +24,10 @@ export const DeviceSearchBar = () => {
 
     const [deviceURL, setDeviceURL] = useState<string>('https://localhost:8083/spectrometer/ocean-optics/USB2000-plus')
     const [deviceFound, setDeviceFound] = useState<boolean | null>(null)
-    const [_, setDevice] = useContext(DeviceContext) as DeviceContextType
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
 
     const loadDevice = async() => {
-        let _device : Device = unknownDevice
+        let _device : Device = device
         let _deviceFound : boolean = false
         try {
             const response = await axios.get(`${deviceURL}/state`)
@@ -35,6 +35,7 @@ export const DeviceSearchBar = () => {
                 case 200  : _device = {
                                 URL : deviceURL,
                                 state : response.data.returnValue,
+                                previousState : device.state,
                                 instanceName : deviceURL.split('/').slice(3).join('/')
                             }; 
                             _deviceFound = true;

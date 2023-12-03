@@ -17,6 +17,7 @@ import axios from 'axios';
 export type Device = { 
     URL : string
     state : string 
+    previousState : string
     instanceName : string
 }
 
@@ -27,6 +28,7 @@ export const DeviceContext = createContext<null | DeviceContextType>(null)
 export const unknownDevice = {
     URL : '',
     state : 'unknown',
+    previousState : 'unknown',
     instanceName : 'unknown'
 }
 
@@ -61,8 +63,9 @@ export const DeviceSearchBar = () => {
             const response = await axios.get(`${deviceURL}/state`)
             switch(response.status){
                 case 200  : _device = {
-                                URL : deviceURL,
+                                URL : deviceURL, 
                                 state : response.data.returnValue,
+                                previousState : device.state,
                                 instanceName : deviceURL.split('/').slice(3).join('/')
                             }; 
                             _deviceFound = true;

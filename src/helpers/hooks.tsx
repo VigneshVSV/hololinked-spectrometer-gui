@@ -8,14 +8,17 @@ export const useRemoteFSM = (FSMProps : {[key : string] : { [key : string] : any
     const [currentProps, setCurrentProps] = useState(FSMProps[state] || FSMProps["DEFAULT"]) 
 
     useEffect(() => {
-        let newProps = FSMProps[state]
-        if(!newProps) 
+        let newProps = {...FSMProps["DEFAULT"]}
+        if(!FSMProps[state]) 
             newProps = FSMProps["DEFAULT"]
-        else 
-            newProps = {
-                ...FSMProps["DEFAULT"],
-                ...newProps
-            }        
+        else {
+            for(let key of Object.keys(FSMProps[state])) {
+                newProps[key] = {
+                    ...FSMProps["DEFAULT"][key],
+                    ...FSMProps[state][key]
+                }        
+            }
+        }
         console.log("new props", newProps)
         setCurrentProps(newProps)
     }, [state])
