@@ -254,7 +254,11 @@ export const SpectrumGraph = () => {
             <Typography variant='button' color={'grey'} fontSize={14} sx={{ p : 1, pl : 2.5}}>
                 Last Measured Timestamp : {lastMeasureTimestamp}
             </Typography>
-            <Box ref={plotDivRef} sx={{ border : '1px solid grey', display : 'flex', flexGrow :  1}}>
+            <Box 
+                ref={plotDivRef} 
+                sx={{ border : '1px solid grey', display : 'flex', 
+                    flexGrow : 1, minHeight : 500}}
+            >
                 <Plot 
                     data={[{
                         x: wavelengths,
@@ -385,25 +389,22 @@ const AutoApplySettings = () => {
     )
 }
 
-
-const TriggerModeOptions = () => {
-
-    const [{ triggerMode, autoApply }, updateSettings] = useContext(SettingsContext)
-    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
+const useDeviceSetting = (name : string, URL : string) : [any, Function] => {
+    const [settings, updateSettings] = useContext(SettingsContext)
+    const autoApply = settings.autoApply
+    const setting = settings[name as keyof SettingOptions]
     const [error, setError] = useState<boolean>(false)
-   
-    const handleTriggerModeChange = useCallback((event : React.ChangeEvent<HTMLInputElement>) => {
+    
+    const handleSettingChange = useCallback((value : any) => {
         const apply = async() => {
-            let finalSettingValue = Number(event.target.value), hasError = false
+            let finalSettingValue = value, hasError = false
             if(autoApply) {
                 try {
                     const response = await axios.put(
-                        `${device.URL}/trigger-mode`,
-                        { value : finalSettingValue }
+                        URL, { value : value }
                     )
                     switch(response.status) {
-                        case 200: 
-                        case 202: finalSettingValue = response.data.returnValue; break;
+                        case 200: finalSettingValue = response.data.returnValue; break;
                         case 404: hasError = true; break;
                     }
                 } catch(error) {
@@ -418,7 +419,16 @@ const TriggerModeOptions = () => {
         }
         // console.log(event.target.value)
         apply()
-    }, [triggerMode, autoApply, device, updateSettings])
+    }, [setting, autoApply, URL, updateSettings])
+        
+    return [setting, handleSettingChange] 
+}
+    
+    
+const TriggerModeOptions = () => {
+        
+    const [device, setDevice] = useContext(DeviceContext) as DeviceContextType
+    const [triggerMode, setTriggerMode] = useDeviceSetting('triggerMode', `${device.URL}/trigger-mode`)
 
     return (
         <FormControl>
@@ -430,7 +440,7 @@ const TriggerModeOptions = () => {
                     row
                     value={triggerMode}
                     name="radio-buttons-group"   
-                    onChange={handleTriggerModeChange}
+                    onChange={(event : React.ChangeEvent<HTMLInputElement>) => {setTriggerMode(Number(event.target.value))}}
                 >
                     <FormControlLabel value={0} control={<Radio />} label="continuous" />
                     <FormControlLabel value={1} control={<Radio />} label="software" />
