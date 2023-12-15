@@ -5,7 +5,7 @@ import { Device, DeviceContext, unknownDevice } from "../App";
 import { DeviceSearchBar } from "./app-bar";
 
 
-export const ControlApp = () => {
+export const ControlAppWithSettings = () => {
     const [device, setDevice] = useState<Device>(unknownDevice)
    
     return (
