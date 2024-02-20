@@ -6,7 +6,7 @@ import '@fontsource/roboto/500.css';
 import '@fontsource/roboto/700.css';
 
 import { Box, Button, Divider, Link, Tabs, Typography, Tab, AppBar, Toolbar, TextField, IconButton} from "@mui/material";
-import { useCallback, useState, createContext, useContext } from 'react';
+import { useCallback, useState, createContext, useContext, useRef, MutableRefObject } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import { TabPanel } from './helpers/components';
 import { DeviceConsole } from './core/device';
@@ -33,18 +33,22 @@ export const unknownDevice = {
 }
 
 
+export const AppContext = createContext<null | MutableRefObject<any>>(null)
 
 function App() {
 
     const [device, setDevice] = useState<Device>(unknownDevice)
+    const appSettings = useRef({ liveExamples : false })
    
     return (
-        <DeviceContext.Provider value={[device, setDevice]}>
-            <DeviceSearchBar />
-            <Toolbar variant="dense" />
-            {/* toolbar adds padding & should be similar to defined in DeviceSearchBar */}
-            <Functionalities />
-        </DeviceContext.Provider>
+        <AppContext.Provider value={appSettings}>
+            <DeviceContext.Provider value={[device, setDevice]}>
+                <DeviceSearchBar />
+                <Toolbar variant="dense" />
+                {/* toolbar adds padding & should be similar to defined in DeviceSearchBar */}
+                <Functionalities />
+            </DeviceContext.Provider>
+        </AppContext.Provider>
         
     );
 }
